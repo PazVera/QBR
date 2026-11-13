@@ -7,6 +7,20 @@
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyD1VcBuj9dWdf0TNTl1XUsE1yDiRS8D-t8",
+      authDomain: "qbr-lac.firebaseapp.com",
+      projectId: "qbr-lac",
+      storageBucket: "qbr-lac.firebasestorage.app",
+      messagingSenderId: "674107780176",
+      appId: "1:674107780176:web:8a4fc7e5bc5c7ace52f555"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+  </script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:"72","72full",Arial,Helvetica,sans-serif;background:#F5F6F7;color:#32363A}
@@ -19,7 +33,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState } = React;
+const { useState, useEffect, useCallback, useRef } = React;
 
 // ── PALETA SAP FIORI ──────────────────────────────────────────
 const P = {
@@ -984,6 +998,38 @@ function App() {
   const [q1i, setQ1i]  = useState({ nnu:{low:0,verbal:0,high:0} });
   const [gp,  setGp]   = useState(INIT_GP);
   const [rtc, setRtc]  = useState(makeRTC());
+  const [saving, setSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+
+  const VENDOR_KEY = VENDOR.name.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
+
+  useEffect(() => {
+    db.collection('vendors').doc(VENDOR_KEY).get()
+      .then(doc => {
+        if (doc.exists) {
+          const data = doc.data();
+          if (data.q4i) setQ4i(data.q4i);
+          if (data.q1i) setQ1i(data.q1i);
+          if (data.rtc) setRtc(data.rtc);
+          const ts = data.updatedAt;
+          if (ts) setLastSaved(ts.toDate().toLocaleString('es-AR'));
+        }
+        setLoaded(true);
+      })
+      .catch(e => { console.error(e); setLoaded(true); });
+  }, []);
+
+  const save = useCallback(() => {
+    setSaving(true);
+    db.collection('vendors').doc(VENDOR_KEY).set(
+      { q4i, q1i, rtc, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+      { merge: true }
+    ).then(() => {
+      setSaving(false);
+      setLastSaved(new Date().toLocaleString('es-AR'));
+    }).catch(e => { console.error(e); setSaving(false); });
+  }, [q4i, q1i, rtc]);
 
   const TABS = [
     {id:"ytd", l:"YTD Results"},{id:"q4fc",l:"Forecast Q4"},
@@ -1034,6 +1080,15 @@ function App() {
                 <div style={{fontWeight:800,fontSize:16,color:k.c,marginTop:2}}>{k.v}</div>
               </div>
             ))}
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+              <button onClick={save} disabled={saving||!loaded}
+                style={{background:saving?"#6c757d":P.green,color:"#fff",border:"none",
+                  borderRadius:6,padding:"8px 16px",cursor:saving?"default":"pointer",
+                  fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>
+                {saving?"Guardando…":"💾 Guardar"}
+              </button>
+              {lastSaved && <div style={{fontSize:9,opacity:.5,whiteSpace:"nowrap"}}>Guardado: {lastSaved}</div>}
+            </div>
           </div>
         </div>
       </div>
